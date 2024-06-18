@@ -63,12 +63,12 @@ uint8_t lower_limit[] = "Below The Lower Limit\r\n";
 uint8_t error_read[] = "Reading Error\r\n";
 uint8_t queue_fail[] = "Failed to Receive\r\n";
 uint8_t queue_full[] = "Queue is Full\r\n";
+TaskHandle_t receive_task, create_task, send_task;
+QueueHandle_t distance_queue;
 
 /* USER CODE END Variables */
 
 /* Definitions for defaultTask */
-TaskHandle_t receive_task, create_task, send_task;
-QueueHandle_t distance_queue;
 /* Private function prototypes -----------------------------------------------*/
 
 /* USER CODE BEGIN FunctionPrototypes */
@@ -218,9 +218,9 @@ void send_task_callback(void *argument) {
 			if(buf[0]!=0xff || (buf[0]==buf[3]))
 			{
 				HAL_GPIO_WritePin(GPIOA, LD2_Pin, GPIO_PIN_RESET);
-				vTaskDelay(pdMS_TO_TICKS(100));
+				vTaskDelay(pdMS_TO_TICKS(50));
 				HAL_GPIO_WritePin(GPIOA, LD2_Pin, GPIO_PIN_SET);
-				vTaskDelay(pdMS_TO_TICKS(200));
+				vTaskDelay(pdMS_TO_TICKS(300));
 //				vTaskDelay(pdMS_TO_TICKS(500));
 //				HAL_UART_Receive(&huart6, &pos_0, 1,100);
 			}
@@ -252,7 +252,7 @@ void send_task_callback(void *argument) {
 			HAL_UART_Transmit(&huart2, error_read, sizeof(error_read),
 			HAL_MAX_DELAY);
 		}
-		vTaskDelay(pdMS_TO_TICKS(500));
+		vTaskDelay(pdMS_TO_TICKS(300));
 	}
 	HAL_GPIO_WritePin(GPIOA, LD2_Pin, GPIO_PIN_RESET);
 	vTaskDelay(pdMS_TO_TICKS(100));
