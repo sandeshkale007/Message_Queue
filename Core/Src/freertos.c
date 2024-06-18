@@ -49,16 +49,20 @@
 /* USER CODE BEGIN Variables */
 
 unsigned char rxBuffer[4];
-
-
-
+unsigned char buf[4];
+unsigned char pos_0;
+unsigned char pos_1;
+unsigned char pos_2;
+unsigned char pos_3;
+uint16_t distance;
 char buffer[18];
 
 uint8_t flag = 0;
 
 uint8_t lower_limit[] = "Below The Lower Limit\r\n";
-uint8_t message1[] = "Reading Error\r\n";
+uint8_t error_read[] = "Reading Error\r\n";
 uint8_t queue_fail[] = "Failed to Receive\r\n";
+uint8_t queue_full[] = "Queue is Full\r\n";
 
 /* USER CODE END Variables */
 
@@ -111,9 +115,8 @@ void MX_FREERTOS_Init(void) {
 	/* add threads, ... */
 	BaseType_t status;
 //	status = xTaskCreate(receive_task_callback, "Task receive", 200, NULL, 31,&receive_task);
-	status = xTaskCreate(create_task_callback, "Task receive", 200, NULL, 31,
+	status = xTaskCreate(create_task_callback, "Task receive", 200, NULL, 30,
 			&create_task);
-//	status = xTaskCreate(receive_task_callback, "Task receive", 200, NULL, 31,&send_task);
 	if (status != pdPASS) {
 		HAL_UART_Transmit(&huart2, (uint8_t*) "Fail to Create Task\r\n",
 				sizeof("Fail to Create Task\r\n"), HAL_MAX_DELAY);
@@ -158,46 +161,103 @@ void create_task_callback(void *argument) {
 				sizeof("Fail to Create Sub Task\r\n"), HAL_MAX_DELAY);
 	}
 	for (;;) {
-		status = xTaskCreate(receive_task_callback, "Task receive", 200, NULL,
-				31, &send_task);
+		status = xTaskCreate(send_task_callback, "Task receive", 200, NULL, 31,
+				&send_task);
 		if (status != pdPASS) {
 			HAL_UART_Transmit(&huart2, (uint8_t*) "Fail to Create Sub Task\r\n",
 					sizeof("Fail to Create Sub Task\r\n"), HAL_MAX_DELAY);
 		}
+		vTaskSuspend(create_task);
 	}
 }
+//void send_task_callback(void *argument) {
+//	// Infinite loop for the task
+//	uint16_t distance;
+//	HAL_GPIO_WritePin(GPIOA, LD2_Pin, GPIO_PIN_SET);
+//	for (int i = 0; i < 5; i++) {
+//		HAL_UART_Receive_DMA(&huart6, rxBuffer, 4);
+//		vTaskDelay(pdMS_TO_TICKS(10));
+//		HAL_UART_Receive_DMA(&huart6, rxBuffer, 4);
+//		if (rxBuffer[0] == 0xff) {
+//			distance = rxBuffer[1] * 256 + rxBuffer[2];
+//			if (distance == 250 || distance == 0 || distance >= 65280) {
+//				flag = 3;
+//				break;
+//			} else {
+//				flag = 1;
+//			}
+//		} else {
+//			flag = 2;
+////			break;
+//		}
+//		if (flag == 3) {
+//			HAL_UART_Transmit(&huart2, lower_limit, sizeof(lower_limit),
+//			HAL_MAX_DELAY);
+//		} else if (flag == 1) {
+//			xQueueSend(distance_queue, &distance, portMAX_DELAY);
+//		} else {
+//			HAL_UART_Transmit(&huart2, error_read, sizeof(error_read),
+//			HAL_MAX_DELAY);
+//		}
+//		vTaskDelay(pdMS_TO_TICKS(500));
+//	}
+//	HAL_GPIO_WritePin(GPIOA, LD2_Pin, GPIO_PIN_RESET);
+//	vTaskDelay(pdMS_TO_TICKS(1000));
+//	vTaskResume(create_task);
+//	vTaskDelete(send_task);
+//}
 
 void send_task_callback(void *argument) {
 	// Infinite loop for the task
 	uint16_t distance;
 	HAL_GPIO_WritePin(GPIOA, LD2_Pin, GPIO_PIN_SET);
 	for (int i = 0; i < 5; i++) {
-		HAL_UART_Receive_DMA(&huart6, rxBuffer, 4);
-		vTaskDelay(pdMS_TO_TICKS(10));
-		HAL_UART_Receive_DMA(&huart6, rxBuffer, 4);
-		if (rxBuffer[0] == 0xff) {
-			distance = rxBuffer[1] * 256 + rxBuffer[2];
-			if (distance == 250 || distance == 0) {
+		for (;;) {
+			HAL_UART_Receive_DMA(&huart6, buf, 4);
+			vTaskDelay(pdMS_TO_TICKS(250));
+			if(buf[0]!=0xff || (buf[0]==buf[3]))
+			{
+				HAL_GPIO_WritePin(GPIOA, LD2_Pin, GPIO_PIN_RESET);
+				vTaskDelay(pdMS_TO_TICKS(100));
+				HAL_GPIO_WritePin(GPIOA, LD2_Pin, GPIO_PIN_SET);
+				vTaskDelay(pdMS_TO_TICKS(200));
+//				vTaskDelay(pdMS_TO_TICKS(500));
+//				HAL_UART_Receive(&huart6, &pos_0, 1,100);
+			}
+			else
+			{
+				break;
+			}
+		}
+
+		if (buf[0] == 0xff) {
+			distance = buf[1] * 256 + buf[2];
+			if (distance == 250 || distance == 0 || distance >= 65280) {
 				flag = 3;
+				break;
 			} else {
 				flag = 1;
 			}
 		} else {
 			flag = 2;
+//			break;
 		}
 		if (flag == 3) {
-			HAL_UART_Transmit(&huart2, lower_limit, sizeof(lower_limit), HAL_MAX_DELAY);
+			HAL_UART_Transmit(&huart2, lower_limit, sizeof(lower_limit),
+			HAL_MAX_DELAY);
 		} else if (flag == 1) {
-			xQueueSend(distance_queue,distance,portMAX_DELAY);
+			xQueueSend(distance_queue, &distance, portMAX_DELAY);
+			flag = 0;
 		} else {
-			HAL_UART_Transmit(&huart2, message1, sizeof(message1),
+			HAL_UART_Transmit(&huart2, error_read, sizeof(error_read),
 			HAL_MAX_DELAY);
 		}
 		vTaskDelay(pdMS_TO_TICKS(500));
 	}
 	HAL_GPIO_WritePin(GPIOA, LD2_Pin, GPIO_PIN_RESET);
-	vTaskDelay(pdMS_TO_TICKS(10));
-	vTaskDelete(receive_task);
+	vTaskDelay(pdMS_TO_TICKS(100));
+	vTaskResume(create_task);
+	vTaskDelete(send_task);
 }
 
 /* USER CODE END Application */
